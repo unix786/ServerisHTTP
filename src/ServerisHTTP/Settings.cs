@@ -174,6 +174,9 @@ namespace ServerisHTTP
         /// <summary></summary>
         [Key("HTTPDefaultPage")]
         public static string HTTPDefaultPage { get; private set; } = "index.html";
+
+        [Key("RedirectToIndex")]
+        public static bool RedirectToIndex { get; private set; } = false;
         #endregion
     }
 }

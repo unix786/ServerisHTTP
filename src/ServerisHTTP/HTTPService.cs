@@ -78,8 +78,15 @@ namespace ServerisHTTP
             const string defaultRequestStr = "/";
             if (String.IsNullOrEmpty(requestTarget) || requestTarget == defaultRequestStr)
             {
-                SendDefaultRedirect(socket, receivedStr);
-                return;
+                if (Settings.RedirectToIndex)
+                {
+                    SendDefaultRedirect(socket, receivedStr);
+                    return;
+                }
+                else
+                {
+                    requestTarget = Settings.HTTPDefaultPage;
+                }
             }
 
             string trimmedRequest = requestTarget.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -153,7 +160,10 @@ Hello. <A href= ""{0}"" > Redirecting...</ A >
         /// </summary>
         private static void SendHTTP(Socket socket, ResponseTypes responseType, byte[] dataBytes = null)
         {
-            string header = "HTTP/1.1" + symbolSP + ((int)responseType).ToString() + symbolSP + responseType.GetMessage();
+            const string headerTemplate =
+                @"HTTP/1.1 {0} {1}"
+                + symbolCRLF + "Content-Type: text/html";
+            string header = String.Format(headerTemplate, (int)responseType, responseType.GetMessage());
             byte[] bytes;
             if (dataBytes == null)
             {
