@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 /*
 HTTP/1.1 Message Format:
@@ -19,6 +15,9 @@ http://httpwg.org/specs/
 
 namespace ServerisHTTP
 {
+    /// <summary>
+    /// My own implementation of a HTTP service. As of now, it only responds to simple GET requests.
+    /// </summary>
     internal static class HTTPService
     {
         const string
@@ -26,7 +25,7 @@ namespace ServerisHTTP
             symbolCRLF = "\r\n";
 
         /// <summary>
-        /// 
+        /// Sends a response to an HTTP request.
         /// </summary>
         /// <param name="socket">Connection.</param>
         /// <param name="requestBytes">The array must be truncated to match size of request.</param>
@@ -65,11 +64,11 @@ namespace ServerisHTTP
         }
 
         /// <summary>
-        /// 
+        /// Sends a response to a GET request.
         /// </summary>
         /// <param name="socket">Connection socket.</param>
-        /// <param name="receivedStr"></param>
-        /// <param name="requestTarget">Must be in decoded form.</param>
+        /// <param name="receivedStr">Client's request message.</param>
+        /// <param name="requestTarget">Must be in unescaped (decoded) form.</param>
         /// <remarks>
         /// HTTP/1.1 GET:
         /// <para/>https://tools.ietf.org/html/rfc7231#section-4.3.1
@@ -87,12 +86,7 @@ namespace ServerisHTTP
             var fi = new FileInfo(Path.Combine(Settings.HTTPRootDirectory, trimmedRequest));
             if (fi.FullName.StartsWith(Settings.HTTPRootDirectory) && fi.Exists)
             {
-                string pageData;
-                using (var stream = fi.OpenRead())
-                using (var reader = new StreamReader(stream))
-                {
-                    pageData = reader.ReadToEnd();
-                }
+                var pageData = File.ReadAllBytes(fi.FullName);
                 SendHTTP(socket, pageData);
                 return;
             }
@@ -101,10 +95,10 @@ namespace ServerisHTTP
         }
 
         /// <summary>
-        /// 
+        /// Sends a web-page that immediately redirects to <see cref="Settings.HTTPDefaultPage"/>.
         /// </summary>
-        /// <param name="socket"></param>
-        /// <param name="receivedStr"></param>
+        /// <param name="socket">Connection.</param>
+        /// <param name="receivedStr">Client's request message.</param>
         /// <remarks>
         /// HTTP/1.1 Host:
         /// https://tools.ietf.org/html/rfc7230#section-5.4
@@ -141,37 +135,35 @@ Hello. <A href= ""{0}"" > Redirecting...</ A >
                     targetUri = new Uri(rootUri, targetUri);
                 }
             }
-            string pageData = String.Format(redirectResponse,
+            string dataString = String.Format(redirectResponse,
                 WebUtility.HtmlEncode(targetUri?.ToString()),
                 WebUtility.HtmlEncode(rootPath));
+            byte[] pageData = Encoding.UTF8.GetBytes(dataString);
             SendHTTP(socket, ResponseTypes.OK, pageData);
         }
 
-        private static void SendHTTP(Socket socket, string pageData)
+        private static void SendHTTP(Socket socket, byte[] pageData)
         {
             SendHTTP(socket, ResponseTypes.OK, pageData);
         }
 
         /// <summary>
-        /// 
+        /// Creates an HTTP header based on <paramref name="responseType"/> and
+        /// appends <paramref name="dataBytes"/> if specified.
         /// </summary>
-        /// <remarks>
-        /// XML Character Encoding in Entities:
-        /// <para/>https://www.w3.org/TR/REC-xml/#charencoding
-        /// </remarks>
-        private static void SendHTTP(Socket socket, ResponseTypes responseType, string htmlData = null)
+        private static void SendHTTP(Socket socket, ResponseTypes responseType, byte[] dataBytes = null)
         {
             string header = "HTTP/1.1" + symbolSP + ((int)responseType).ToString() + symbolSP + responseType.GetMessage();
             byte[] bytes;
-            if (htmlData == null)
+            if (dataBytes == null)
             {
                 bytes = Encoding.ASCII.GetBytes(header);
             }
             else
             {
                 header += symbolCRLF + symbolCRLF;
-                // Should fix encoding of the web-page so that it always matches what is specified in HTML.
-                bytes = Encoding.ASCII.GetBytes(header).Concat(Encoding.UTF8.GetBytes(htmlData)).ToArray();
+                // Data bytes may be encoded differently from the header.
+                bytes = Encoding.ASCII.GetBytes(header).Concat(dataBytes).ToArray();
             }
             socket.Send(bytes);
         }
